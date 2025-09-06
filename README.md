@@ -1,8 +1,8 @@
 This project aims to build a machine learning model that predicts housing quality risks in New York city, using publicly available data from NYC open data. The model will identify which buildings are most likely to develop serious housing violations (such as mold, heating issues, or rodent infestations).
 Unlike existing dashboards that only show past complaints, this project focuses on:
-predicting future housing risks
-auditing fairness across neighborhoods
-Explaining predictions using interpretable AI methods
+predicting future housing risks,
+auditing fairness across neighborhoods,
+Explaining predictions using interpretable AI methods.
 
 Objectives:
 Predictive modeling - Train ML models on 311 complaints and housing violation data.
