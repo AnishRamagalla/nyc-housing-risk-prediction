@@ -1,33 +1,66 @@
-This project aims to build a machine learning model that predicts housing quality risks in New York city, using publicly available data from NYC open data. The model will identify which buildings are most likely to develop serious housing violations (such as mold, heating issues, or rodent infestations).
-Unlike existing dashboards that only show past complaints, this project focuses on:
-predicting future housing risks,
-auditing fairness across neighborhoods,
-Explaining predictions using interpretable AI methods.
+#  NYC Housing Risk Prediction  
 
-Objectives:
-Predictive modeling - Train ML models on 311 complaints and housing violation data.
-Fairness Analysis - Investigate if predictions are biased against certain neighborhoods or demographics
-Interpretability - Apply SHAP/LIME to explain why a property is flagged as "high-risk".
+## Project Overview  
+This project aims to build a **machine learning model that predicts housing quality risks in New York City**, using publicly available data from NYC Open Data. The model will identify which buildings are most likely to develop serious housing violations (such as mold, heating issues, or rodent infestations).  
 
-Datasets
-NYC 311 Service requests
-NYC HPD Housing Maintanence Code Violations
-NYC DOB Complaints
-NYC Neighborhood Demographics
-All Data is available publicly in NYC Open Data
+Unlike existing dashboards that only show past complaints, this project focuses on:  
+-  Predicting future housing risks  
+-  Auditing fairness across neighborhoods  
+-  Explaining predictions using interpretable AI methods  
 
-Tech Stack
-Python (pandas, Numpy, Scikit-learn)
-Machine Learning (Random Forest, XGBoost, Logistic Regression)
-Explainability (SHAP, LIME)
-Visualization (Matplotlib, seaborn, Plotly)
-Collaboration & writing: Jupyter Notebooks, Overleaf(Latex), GitHub
+---
 
-Expected Outcomes
-A trained ML model that flags high-risk housing units in NYC
-fairness audit results across different boroughs/neighborhoods
-Interpretable explanations of model predictions
+##  Objectives  
+- **Predictive modeling** – Train ML models on 311 complaints and housing violation data.  
+- **Fairness Analysis** – Investigate if predictions are biased against certain neighborhoods or demographics.  
+- **Interpretability** – Apply SHAP/LIME to explain why a property is flagged as “high-risk.”  
 
-Author
-Anish Ramagalla
-Masters student - Computer Science, Pace University
+---
+
+##  Datasets  
+- NYC 311 Service Requests (housing complaints like no heat, mold, pests)  
+- NYC HPD Housing Maintenance Code Violations  
+- NYC DOB Complaints (building safety)  
+- NYC Neighborhood Demographics (for fairness analysis)  
+
+ All datasets are publicly available via [NYC Open Data](https://opendata.cityofnewyork.us/).  
+
+---
+
+##  Tech Stack  
+- **Python** (Pandas, NumPy, Scikit-learn)  
+- **Machine Learning** (Random Forest, XGBoost, Logistic Regression)  
+- **Explainability** (SHAP, LIME)  
+- **Visualization** (Matplotlib, Seaborn, Plotly)  
+- **Collaboration & Writing**: Jupyter Notebooks, Overleaf (LaTeX), GitHub  
+
+---
+
+## Planned Timeline  
+
+**Semester 1 (Foundations):**  
+- Data collection & cleaning (Sept)  
+- Exploratory data analysis (Sept–Oct)  
+- Baseline model (Oct)  
+- Improved predictive models (Nov)  
+- Mid-semester report & professor review (Dec)  
+
+**Semester 2 (Advanced):**  
+- Fairness & bias audit (Jan–Feb)  
+- Interpretability methods (Feb–Mar)  
+- Paper writing + thesis defense prep (Mar–Apr)  
+- Final GitHub documentation & presentation (Apr–May)  
+
+---
+
+## Expected Outcomes  
+- A trained ML model that flags high-risk housing units in NYC.  
+- Fairness audit results across different boroughs/neighborhoods.  
+- Interpretable explanations of model predictions.  
+- A complete **Master’s Thesis** and a **public GitHub portfolio project**.  
+
+---
+
+##  Author  
+**Anish Ramagalla**  
+Master’s Student – Computer Science, Pace University
