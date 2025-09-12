@@ -1,10 +1,9 @@
-# app.py
 from __future__ import annotations
 import json
 from pathlib import Path
 import joblib
-import pandas as pd
 import numpy as np
+import pandas as pd
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
@@ -16,25 +15,31 @@ FEATURE_LIST_PATH = ARTIFACTS_DIR / "feature_list.json"
 LIVE_FEATURES_PATH = Path("data/live/features.csv")
 
 # ---------------- UI SETUP ----------------
-st.set_page_config(page_title="NYC Housing Risk Prediction", page_icon="🏠", layout="wide")
+st.set_page_config(
+    page_title="NYC Housing Risk Prediction",
+    page_icon="🏠",
+    layout="wide"
+)
+
 st.title("🏠 NYC Housing Risk Prediction")
 
 with st.sidebar:
     st.header("📌 About this Project")
     st.write(
         """
-        Predict **NYC housing risk** from building complaints.  
+        Predict **NYC housing risk** using complaints + building features.
 
         **Features**:
         - Enter or select a BBL  
         - Get risk label & probability  
         - Visualize location on NYC map  
-        - Debug panel for dataset  
+        - View dataset distribution  
 
         👉 Data updates dynamically from live ingestion scripts.
         """
     )
     st.caption("Built with Streamlit + scikit-learn + Folium")
+
 
 # ---------------- HELPERS ----------------
 @st.cache_data
@@ -83,23 +88,18 @@ def ensure_columns(df: pd.DataFrame, feature_list: list[str]) -> pd.DataFrame:
 
 def predict_for_bbl(bbl: str, model, feature_list: list[str], df_features: pd.DataFrame):
     if model is None or df_features.empty:
-        return None, None, None
-
+        return None, None
     key = str(bbl).strip()
     row = df_features[df_features["bbl"] == key]
-
     if row.empty:
-        return None, None, None
-
+        return None, None
     X = row[feature_list].fillna(0) if feature_list else row.select_dtypes(include=[np.number]).fillna(0)
-
     try:
         y_prob = float(model.predict_proba(X)[0, 1])
         y_pred = int(model.predict(X)[0])
     except Exception as e:
         st.error(f"Prediction failed: {e}")
-        return None, None, None
-
+        return None, None
     return y_pred, y_prob, row
 
 
@@ -108,14 +108,15 @@ model, model_err, feature_list = load_model()
 df_features = load_live_features()
 df_features = ensure_columns(df_features, feature_list)
 
+
 # ---------------- STATUS ----------------
 with st.expander("ℹ️ Status", expanded=False):
     st.write(f"**Model:** {'✅' if MODEL_PATH.exists() else '❌'}")
     st.write(f"**Feature list:** {'✅' if FEATURE_LIST_PATH.exists() else '❌'}")
     st.write(f"**Live features:** {'✅' if LIVE_FEATURES_PATH.exists() else '❌'}")
+    if model_err:
+        st.warning(model_err)
 
-if model_err:
-    st.warning(model_err)
 
 # ---------------- INPUT ----------------
 bbl_options = df_features["bbl"].astype(str).unique().tolist() if not df_features.empty else []
@@ -123,11 +124,16 @@ default_bbl = bbl_options[0] if bbl_options else ""
 
 col1, col2 = st.columns([3, 1])
 with col1:
-    bbl_input = st.text_input("Enter or select a BBL (e.g. 1004500035):", value=default_bbl)
+    bbl_input = st.text_input(
+        "Enter or select a BBL (e.g. 1004500035):",
+        value=default_bbl,
+        placeholder="1004500035"
+    )
 with col2:
     picked = st.selectbox("Or pick", options=bbl_options, index=0 if bbl_options else None)
     if picked:
         bbl_input = picked
+
 
 # ---------------- PREDICTION ----------------
 if st.button("🔍 Predict Risk", type="primary"):
@@ -138,32 +144,42 @@ if st.button("🔍 Predict Risk", type="primary"):
     elif df_features.empty:
         st.error("No live features loaded. Run the live ingestion job.")
     else:
-        y_pred, y_prob, row = predict_for_bbl(bbl_input, model, feature_list, df_features)
-        if y_pred is None:
+        result = predict_for_bbl(bbl_input, model, feature_list, df_features)
+        if result[0] is None:
             st.warning(f"No data found for building ID **{bbl_input}**")
         else:
+            y_pred, y_prob, row = result
             label = "🟢 Low Risk" if y_pred == 0 else "🔴 High Risk"
-            color = "#bbf7d0" if y_pred == 0 else "#fecaca"
 
             # Risk card
             st.markdown(
                 f"""
-                <div style="padding:1rem; border-radius:0.5rem; background-color:{color}; border:1px solid #d1d5db">
-                    <h3 style="margin:0;">{label}</h3>
-                    <p style="margin:0;">Probability of risk: <b>{y_prob:.2%}</b></p>
+                <div style="padding:1rem; border-radius:0.5rem; background-color:#f9fafb; border:1px solid #d1d5db">
+                <h3 style="margin:0;">{label}</h3>
+                <p style="margin:0;">Probability of risk: <b>{y_prob:.2%}</b></p>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
-            # Map visualization if lat/lon exists
+            # Map visualization
             if {"lat", "lon"}.issubset(row.columns):
                 lat, lon = float(row["lat"].iloc[0]), float(row["lon"].iloc[0])
                 m = folium.Map(location=[lat, lon], zoom_start=16)
-                folium.Marker([lat, lon], popup=f"BBL {bbl_input} — {label}").add_to(m)
+                folium.Marker(
+                    [lat, lon],
+                    popup=f"BBL {bbl_input} — {label}",
+                    tooltip="Building location"
+                ).add_to(m)
                 st_folium(m, width=700, height=450)
             else:
                 st.info("⚠️ No latitude/longitude found in live data for this BBL.")
+
+# Optional: dataset chart
+if "events_12m" in df_features.columns:
+    st.subheader("📊 Complaints distribution (12 months)")
+    st.bar_chart(df_features["events_12m"].value_counts())
+
 
 # ---------------- DEBUG ----------------
 with st.expander("🛠️ Debug", expanded=False):
