@@ -1,112 +1,90 @@
-# live/ingest_complaints.py
-import os
-import sys
-import time
-import json
-import math
+import streamlit as st
 import pandas as pd
-import requests
-from datetime import datetime, timedelta, timezone
+import joblib
+import os
+from datetime import datetime
 
-LIVE_DIR = "data/live"
-LIVE_FEATURES = os.path.join(LIVE_DIR, "features.csv")
-FALLBACK_EVENTS = "data/processed/events_sample_for_debug.csv"  # fallback if API unavailable
+# ---------------- PATHS ----------------
+ARTIFACTS_DIR = "artifacts"
+LIVE_FEATURES = "data/live/features.csv"
+MODEL_PATH = os.path.join(ARTIFACTS_DIR, "model.pkl")
+FEATURE_LIST_PATH = os.path.join(ARTIFACTS_DIR, "feature_list.json")
 
-# NYC Open Data: DOB Complaints (dataset commonly exposed as 'ipu4-2q9a')
-NYC_DATASET = "ipu4-2q9a"
-NYC_BASE = f"https://data.cityofnewyork.us/resource/{NYC_DATASET}.json"
-
-APP_TOKEN = os.environ.get("NYC_APP_TOKEN")  # optional but recommended
-
-def fetch_dob_complaints(since_days=730, limit=50000):
-    """Fetch DOB complaints with BBL + dates, last N days."""
-    since = (datetime.now(timezone.utc) - timedelta(days=since_days)).isoformat()
-    params = {
-        "$select": "bbl,received_date",
-        "$where": f"received_date >= '{since}' AND bbl IS NOT NULL",
-        "$limit": limit,
-        "$order": "received_date DESC"
-    }
-    headers = {"X-App-Token": APP_TOKEN} if APP_TOKEN else {}
-
-    try:
-        r = requests.get(NYC_BASE, params=params, headers=headers, timeout=30)
-        r.raise_for_status()
-        data = r.json()
-        if not data:
-            return None
-        df = pd.DataFrame(data)
-        # Normalize
-        df = df.rename(columns={"received_date": "created_date"})
-        df["created_date"] = pd.to_datetime(df["created_date"], utc=True, errors="coerce")
-        df = df.dropna(subset=["bbl", "created_date"])
-        df["bbl"] = df["bbl"].astype(str)
-        return df[["bbl", "created_date"]]
-    except Exception as e:
-        print(f"API fetch failed ({e}). Will try local fallback.", file=sys.stderr)
+# ---------------- LOAD MODEL + FEATURES ----------------
+@st.cache_resource
+def load_model():
+    if not os.path.exists(MODEL_PATH):
         return None
+    return joblib.load(MODEL_PATH)
 
-def load_events_fallback():
-    if not os.path.exists(FALLBACK_EVENTS):
-        return None
-    df = pd.read_csv(FALLBACK_EVENTS)
-    # Expecting at least: bbl, created_date (or snapshot_year to fake dates)
-    if "created_date" not in df.columns:
-        # fabricate dates using snapshot_year if present
-        if "snapshot_year" in df.columns:
-            df["created_date"] = pd.to_datetime(df["snapshot_year"].astype(str) + "-12-31")
-        else:
-            df["created_date"] = pd.to_datetime("today")
-    df["created_date"] = pd.to_datetime(df["created_date"])
-    df["bbl"] = df["bbl"].astype(str)
-    return df[["bbl", "created_date"]]
+@st.cache_data
+def load_features():
+    if not os.path.exists(LIVE_FEATURES):
+        return pd.DataFrame()
+    return pd.read_csv(LIVE_FEATURES)
 
-def build_features_from_events(df_events):
-    """Aggregate events into features expected by model."""
-    now = pd.Timestamp.utcnow()
-    df = df_events.copy()
-    df["created_date"] = pd.to_datetime(df["created_date"], utc=True, errors="coerce")
-    df = df.dropna(subset=["created_date"])
+@st.cache_data
+def load_feature_list():
+    import json
+    if not os.path.exists(FEATURE_LIST_PATH):
+        return []
+    with open(FEATURE_LIST_PATH, "r") as f:
+        return json.load(f)
 
-    def win(days):
-        return df[df["created_date"] >= (now - pd.Timedelta(days=days))].groupby("bbl").size()
+# ---------------- PREDICT ----------------
+def predict(bbl, model, feature_list, df_features):
+    row = df_features[df_features["bbl"].astype(str) == str(bbl)]
+    if row.empty:
+        return None, f"No data found for building ID {bbl}"
 
-    f_3m  = win(90).rename("events_3m")
-    f_6m  = win(180).rename("events_6m")
-    f_12m = win(365).rename("events_12m")
-    f_24m = win(730).rename("events_24m")
+    X = row[feature_list].fillna(0)
+    prob = model.predict_proba(X)[0, 1]
+    y_pred = model.predict(X)[0]
+    return (y_pred, prob), None
 
-    last = df.groupby("bbl")["created_date"].max().rename("last_event")
-    days_since = ((now - last).dt.days).rename("days_since_last")
-
-    features = pd.concat([f_3m, f_6m, f_12m, f_24m, days_since], axis=1).fillna(0).reset_index()
-    features["days_since_last"] = features["days_since_last"].astype(int)
-    features["snapshot_date"] = now.normalize()
-    return features
-
+# ---------------- UI ----------------
 def main():
-    os.makedirs(LIVE_DIR, exist_ok=True)
+    st.set_page_config(page_title="NYC Housing Risk Prediction", layout="centered")
+    st.title("🏙️ NYC Housing Risk Prediction")
 
-    events = fetch_dob_complaints(since_days=730, limit=100000)
-    if events is None:
-        events = load_events_fallback()
-        if events is None:
-            print(f"No events available (API and fallback both missing).", file=sys.stderr)
-            sys.exit(2)
+    # Load model + features
+    model = load_model()
+    df_features = load_features()
+    feature_list = load_feature_list()
 
-    features = build_features_from_events(events)
-    # Ensure bbl column is string
-    features["bbl"] = features["bbl"].astype(str)
+    if model is None or df_features.empty or not feature_list:
+        st.error("❌ Model or live features not available. Please refresh pipeline.")
+        return
 
-    # Keep only columns used by the model + bbl
-    need_cols = ["bbl", "events_3m", "events_6m", "events_12m", "events_24m", "days_since_last", "snapshot_date"]
-    for col in need_cols:
-        if col not in features.columns:
-            features[col] = 0
+    # Sidebar helper
+    st.sidebar.header("🔎 Explore Available BBLs")
+    sample_bbls = df_features["bbl"].astype(str).sample(min(5, len(df_features)), random_state=42).tolist()
+    st.sidebar.write("Here are some BBLs you can try:")
+    for b in sample_bbls:
+        st.sidebar.code(b)
 
-    features = features[need_cols]
-    features.to_csv(LIVE_FEATURES, index=False)
-    print(f"✅ Wrote live features → {LIVE_FEATURES} (rows={len(features)})")
+    # Main input
+    bbl_input = st.text_input("Enter a BBL (e.g. 1004500035)")
+    if st.button("🔮 Predict"):
+        if not bbl_input.strip():
+            st.warning("Please enter a valid BBL.")
+        else:
+            result, error = predict(bbl_input, model, feature_list, df_features)
+            if error:
+                st.warning(error)
+            else:
+                y_pred, prob = result
+                st.success(f"✅ Prediction={y_pred}, Prob={prob:.3f}")
+
+    # Debug panel
+    with st.expander("🐞 Debug"):
+        st.write("rows:", len(df_features))
+        st.dataframe(df_features.head())
+
+    # Freshness info
+    if "snapshot_date" in df_features.columns:
+        last_update = pd.to_datetime(df_features["snapshot_date"]).max()
+        st.caption(f"📅 Data last updated: {last_update.date()}")
 
 if __name__ == "__main__":
     main()
