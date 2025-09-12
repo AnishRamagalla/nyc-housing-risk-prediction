@@ -1,17 +1,19 @@
-#Ignore Python cache
+# Python cache
 __pycache__/
-*.__pycache__
-#Ignore virtual environment
+*.pyc
+
+# Virtual environment
 venv/
 
-#Ignore data files
-data/*.csv
-data/*.xlsx
-dat/*.zip
+# Data
+data/raw/*
+*.zip
+*.xlsx
+*.csv
 
-#Jupyter checkpoints
+# Notebooks checkpoints
 .ipynb_checkpoints/
 
-#os files
+# OS files
 .DS_Store
-thumbs.db
+Thumbs.db

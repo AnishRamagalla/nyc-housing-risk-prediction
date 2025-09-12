@@ -1,0 +1,6 @@
+{
+  "model_path": "models/monthly_rf_v1.joblib",
+  "features_file": "../data/processed/features_monthly.csv",
+  "snapshot_key": "snapshot_date",
+  "label_window_months": 12
+}
