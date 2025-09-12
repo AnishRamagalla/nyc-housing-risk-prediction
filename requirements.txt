@@ -140,7 +140,7 @@ widgetsnbextension==4.0.14
 xgboost==3.0.5
 xyzservices==2025.4.0
 geopy==2.4.1
-folium
-streamlit-folium
+folium==0.20.0
+streamlit-folium==0.25.1
 
 
