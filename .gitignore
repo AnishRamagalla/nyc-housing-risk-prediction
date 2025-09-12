@@ -1,6 +1,8 @@
-# Python cache
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.log
 
 # Virtual environment
 venv/
@@ -9,7 +11,7 @@ venv/
 data/raw/*
 *.zip
 *.xlsx
-*.csv
+*.sqlite
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
@@ -17,3 +19,6 @@ data/raw/*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Models (optional — comment out if you want to push them)
+# models/*.joblib
