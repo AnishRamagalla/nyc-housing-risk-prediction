@@ -6,21 +6,7 @@ This project aims to build a **machine learning model that predicts housing qual
 Unlike existing dashboards that only show past complaints, this project focuses on:  
 -  Predicting future housing risks  
 -  Auditing fairness across neighborhoods  
--  Explaining predictions using interpretable AI methods
-
-  ##problem: unsafe housing conditions in NYC, tenants need risk awareness.
-
-Data: DOB Complaints dataset (NYC Open Data).
-
-Features: rolling counts of complaints (3m, 6m, 12m, 24m), days since last complaint.
-
-Model: RandomForest, time-series CV, ROC-AUC & PR-AUC.
-
-Results: risk score with explanations.
-
-Live Demo: link to your Streamlit app.
-
-How to Reproduce: pip install -r requirements.txt, python src/train.py, streamlit run app.py
+-  Explaining predictions using interpretable AI methods  
 
 ---
 
@@ -31,50 +17,93 @@ How to Reproduce: pip install -r requirements.txt, python src/train.py, streamli
 
 ---
 
-##  Datasets  
-- NYC 311 Service Requests (housing complaints like no heat, mold, pests)  
-- NYC HPD Housing Maintenance Code Violations  
-- NYC DOB Complaints (building safety)  
-- NYC Neighborhood Demographics (for fairness analysis)  
+## 🧱 Architecture
 
- All datasets are publicly available via [NYC Open Data](https://opendata.cityofnewyork.us/).  
+NYC Open Data (DOB Complaints)
+↓ (ingest)
+data/live/complaints.sqlite
+↓ (feature update)
+data/live/features.csv
+↓ (predict)
+models/monthly_rf_v1.joblib
+↓
+Streamlit Web App (app.py)
 
----
-
-##  Tech Stack  
-- **Python** (Pandas, NumPy, Scikit-learn)  
-- **Machine Learning** (Random Forest, XGBoost, Logistic Regression)  
-- **Explainability** (SHAP, LIME)  
-- **Visualization** (Matplotlib, Seaborn, Plotly)  
-- **Collaboration & Writing**: Jupyter Notebooks, Overleaf (LaTeX), GitHub  
 
 ---
 
-## Planned Timeline  
+## 📦 Project layout
 
-**Semester 1 (Foundations):**  
-- Data collection & cleaning (Sept)  
-- Exploratory data analysis (Sept–Oct)  
-- Baseline model (Oct)  
-- Improved predictive models (Nov)  
-- Mid-semester report & professor review (Dec)  
+├── app.py # Streamlit app
+├── live/
+│ └── ingest_complaints.py # pulls recent DOB complaints → SQLite
+├── src/
+│ ├── features.py # builds rolling features per BIN
+│ ├── predict_live.py # CLI prediction on latest features
+│ ├── train.py # trains RandomForest, saves .joblib
+│ └── ... # (preprocess, evaluate, etc.)
+├── models/
+│ └── monthly_rf_v1.joblib # trained model artifact
+├── data/
+│ ├── live/ # runtime data (SQLite, features.csv)
+│ └── processed/ # training data samples
+├── notebooks/ # 01_ingestion, 02_eda, 03_model
+├── requirements.txt
+└── .gitignore
 
-**Semester 2 (Advanced):**  
-- Fairness & bias audit (Jan–Feb)  
-- Interpretability methods (Feb–Mar)  
-- Paper writing + thesis defense prep (Mar–Apr)  
-- Final GitHub documentation & presentation (Apr–May)  
-
----
-
-## Expected Outcomes  
-- A trained ML model that flags high-risk housing units in NYC.  
-- Fairness audit results across different boroughs/neighborhoods.  
-- Interpretable explanations of model predictions.  
-- A complete **Master’s Thesis** and a **public GitHub portfolio project**.  
 
 ---
 
-##  Author  
-**Anish Ramagalla**  
-Master’s Student – Computer Science, Pace University
+## 🚀 Quickstart (local)
+
+```bash
+# 1) create venv
+python -m venv venv
+venv\Scripts\activate  # on Windows (or: source venv/bin/activate)
+
+# 2) install deps
+pip install -r requirements.txt
+
+# 3) (optional) fetch recent complaints locally and build features
+python live/ingest_complaints.py
+python src/features.py
+
+# 4) (optional) train model locally
+python src/train.py
+
+# 5) run app
+streamlit run app.py
+
+
+🧪 Reproducible modeling
+
+CV: TimeSeriesSplit(n_splits=5)
+
+Metrics: ROC-AUC, PR-AUC; calibration available in reports
+
+Artifacts:
+
+models/monthly_rf_v1.joblib
+
+reports/metrics.json, reports/feature_importance.csv
+
+🗺️ Roadmap
+
+ SHAP & permutation importance in the app (per-prediction explanations)
+
+ Map view with color-coded risk markers (pydeck)
+
+ Auto-refresh features in the cloud (scheduled job / GitHub Actions)
+
+ FastAPI backend (/predict, /features)
+
+ Next.js (React) frontend with search + map + explanations
+
+
+ 🙌 Notes
+
+Building key: BIN (Building Identification Number)
+
+Data: NYC Open Data (DOB Complaints). Used under their terms.
+
+Issues / ideas? PRs welcome → <YOUR-REPO-URL>
