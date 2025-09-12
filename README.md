@@ -6,7 +6,21 @@ This project aims to build a **machine learning model that predicts housing qual
 Unlike existing dashboards that only show past complaints, this project focuses on:  
 -  Predicting future housing risks  
 -  Auditing fairness across neighborhoods  
--  Explaining predictions using interpretable AI methods  
+-  Explaining predictions using interpretable AI methods
+
+  ##problem: unsafe housing conditions in NYC, tenants need risk awareness.
+
+Data: DOB Complaints dataset (NYC Open Data).
+
+Features: rolling counts of complaints (3m, 6m, 12m, 24m), days since last complaint.
+
+Model: RandomForest, time-series CV, ROC-AUC & PR-AUC.
+
+Results: risk score with explanations.
+
+Live Demo: link to your Streamlit app.
+
+How to Reproduce: pip install -r requirements.txt, python src/train.py, streamlit run app.py
 
 ---
 
