@@ -1,106 +1,114 @@
-import os
-import joblib
-import pandas as pd
-import requests
 import streamlit as st
+import pandas as pd
+import joblib
+import json
 import folium
 from streamlit_folium import st_folium
+import requests
+import os
 
-# ---------------- SETTINGS ----------------
+# ---------------- PATHS ----------------
 MODEL_PATH = "artifacts/model.pkl"
-FEATURES_PATH = "data/processed/building_features.csv"
+FEATURE_LIST_PATH = "artifacts/feature_list.json"
+FEATURES_FILE = "data/processed/building_features.csv"
 
-# Mapbox token
-MAPBOX_TOKEN = st.secrets["MAPBOX_TOKEN"]
-
-# ---------------- HELPERS ----------------
-def geocode_address(address: str):
-    """Geocode an address into lat/lon using Mapbox API"""
-    url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{address}.json"
-    params = {"access_token": MAPBOX_TOKEN, "limit": 1}
-    r = requests.get(url, params=params)
-    if r.status_code == 200:
-        data = r.json()
-        if data.get("features"):
-            coords = data["features"][0]["geometry"]["coordinates"]
-            lon, lat = coords
-            place = data["features"][0]["place_name"]
-            return lat, lon, place
-    return None, None, None
-
-def load_model_and_features():
-    """Load trained model and features dataset"""
+# ---------------- LOAD MODEL + FEATURES ----------------
+@st.cache_resource
+def load_model():
     if not os.path.exists(MODEL_PATH):
-        st.error("❌ Model file missing. Please retrain.")
-        st.stop()
-    if not os.path.exists(FEATURES_PATH):
-        st.error("❌ Features file missing. Please preprocess.")
-        st.stop()
-
+        st.error("❌ Model file not found. Run Notebook 3 to train and save model.")
+        return None, None
     model = joblib.load(MODEL_PATH)
-    df = pd.read_csv(FEATURES_PATH)
 
-    # Keep only latest snapshot
-    if "snapshot_year" in df.columns:
-        latest = df["snapshot_year"].max()
-        df = df[df["snapshot_year"] == latest]
+    if not os.path.exists(FEATURE_LIST_PATH):
+        st.error("❌ Feature list not found. Run Notebook 3.")
+        return None, None
 
-    return model, df
+    with open(FEATURE_LIST_PATH, "r") as f:
+        feature_list = json.load(f)
 
-def prepare_features(df, building_id, feature_cols):
-    """Extract row for building_id; fallback to unknown"""
-    if building_id in df["bbl"].astype(str).values:
-        row = df[df["bbl"].astype(str) == str(building_id)].copy()
-    else:
-        st.warning("⚠️ No exact match, using 'unknown'.")
-        row = df[df["bbl"].astype(str) == "unknown"].copy()
+    return model, feature_list
 
-    # Drop non-features
-    drop_cols = ["bbl", "bin", "address", "snapshot_year", "label"]
-    row = row.drop(columns=[c for c in drop_cols if c in row.columns])
+# ---------------- GEOCODING ----------------
+def geocode_address(address: str):
+    """Use Mapbox API to geocode an address -> lat, lon"""
+    token = st.secrets.get("MAPBOX_TOKEN")
+    if not token:
+        st.error("❌ MAPBOX_TOKEN missing. Add it to .streamlit/secrets.toml")
+        return None, None, None
 
-    # Align with training features
-    for col in feature_cols:
-        if col not in row.columns:
-            row[col] = 0
-    row = row[feature_cols]
+    url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{address}.json"
+    params = {"access_token": token, "limit": 1}
+    resp = requests.get(url, params=params)
 
-    return row
+    if resp.status_code != 200:
+        st.error(f"❌ Geocoding API failed: {resp.text}")
+        return None, None, None
 
-# ---------------- STREAMLIT APP ----------------
-st.set_page_config(page_title="NYC Housing Risk", layout="wide")
+    data = resp.json()
+    if not data.get("features"):
+        st.warning("⚠️ No geocoding results found.")
+        return None, None, None
+
+    coords = data["features"][0]["center"]
+    lon, lat = coords
+    place_name = data["features"][0]["place_name"]
+    return lat, lon, place_name
+
+# ---------------- PREDICTION ----------------
+def predict(building_id, model, feature_list):
+    df = pd.read_csv(FEATURES_FILE)
+    row = df[df["bbl"].astype(str) == str(building_id)]
+
+    if row.empty:
+        return None, None
+
+    X = row.reindex(columns=feature_list, fill_value=0)
+    prob = model.predict_proba(X)[0, 1]
+    pred = int(prob >= 0.5)
+
+    return {
+        "building_id": building_id,
+        "risk_prob": float(prob),
+        "pred_label": pred
+    }, X.iloc[0].to_dict()
+
+# ---------------- STREAMLIT UI ----------------
+st.set_page_config(page_title="🏠 NYC Housing Risk", layout="wide")
 st.title("🏠 NYC Housing Risk Prediction")
 
-address = st.text_input("Enter Address (or BIN/BBL):", "124 Lake St, Brooklyn, NY")
+# Load model
+model, feature_list = load_model()
 
-if st.button("Predict Risk"):
-    lat, lon, place = geocode_address(address)
-    if not lat:
-        st.error("❌ Could not geocode address.")
+# Address input
+address = st.text_input("Enter address (e.g., 124 Lake St, Brooklyn, NY)")
+
+if st.button("🔍 Predict"):
+    if not model:
         st.stop()
 
-    st.success(f"📍 Location found: {place} (lat={lat}, lon={lon})")
+    lat, lon, place = geocode_address(address)
+    if lat is None:
+        st.stop()
 
-    # Load model + features
-    model, df = load_model_and_features()
-
-    # Training feature list
-    if hasattr(model, "feature_names_in_"):
-        feature_cols = list(model.feature_names_in_)
-    else:
-        feature_cols = df.drop(columns=["bbl", "bin", "address", "snapshot_year", "label"], errors="ignore").columns.tolist()
-
-    # Pick a building ID (simulate with bbl or fallback)
-    building_id = address if address.isdigit() else "unknown"
-    X_input = prepare_features(df, building_id, feature_cols)
-
-    try:
-        pred = model.predict(X_input)[0]
-        st.success(f"✅ Prediction for **{place}**: {int(pred)}")
-    except Exception as e:
-        st.error(f"❌ Prediction error: {e}")
-
-    # Show map
-    m = folium.Map(location=[lat, lon], zoom_start=14)
+    # Display map
+    st.subheader("📍 Location")
+    m = folium.Map(location=[lat, lon], zoom_start=15)
     folium.Marker([lat, lon], popup=place).add_to(m)
-    st_folium(m, width=700, height=400)
+    st_folium(m, width=700, height=500)
+
+    # Try prediction
+    building_id = st.text_input("Enter building BBL (from dataset)", "")
+    if building_id:
+        result, features_used = predict(building_id, model, feature_list)
+
+        if result:
+            st.subheader("📊 Prediction Result")
+            st.write(f"**Building ID:** {result['building_id']}")
+            st.write(f"**Risk Probability:** {result['risk_prob']:.3f}")
+            st.write(f"**Predicted Label:** {result['pred_label']}")
+
+            st.subheader("🔎 Features Used")
+            st.json(features_used)
+        else:
+            st.warning("⚠️ No matching building found in dataset.")
