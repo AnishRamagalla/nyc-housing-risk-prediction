@@ -40,10 +40,15 @@ def predict(bbl, model, feature_list, df):
     if row.empty:
         return None, None, f"No data found for building ID {bbl}"
 
+    # Ensure required feature columns exist
+    for col in feature_list:
+        if col not in row.columns:
+            row[col] = 0
+
     X = row[feature_list].fillna(0)
+
     try:
-        if len(model.classes_) == 1:
-            # Only one class in training → probability always 0.0
+        if len(model.classes_) == 1:  # Edge case: only one class in training
             y_pred = model.classes_[0]
             y_prob = 0.0
         else:
@@ -53,6 +58,7 @@ def predict(bbl, model, feature_list, df):
         return None, None, f"Prediction failed: {e}"
 
     return y_pred, y_prob, None
+
 
 # ---------------- MAIN ----------------
 def main():
